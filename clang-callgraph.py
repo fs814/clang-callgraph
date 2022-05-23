@@ -5,6 +5,7 @@ from clang.cindex import CursorKind, Index, CompilationDatabase
 from collections import defaultdict
 import sys
 import json
+
 """
 Dumps a callgraph of a function in a codebase
 usage: callgraph.py file.cpp|compile_commands.json [-x exclude-list] [extra clang args...]
@@ -22,35 +23,35 @@ FULLNAMES = defaultdict(set)
 
 def get_diag_info(diag):
     return {
-        'severity': diag.severity,
-        'location': diag.location,
-        'spelling': diag.spelling,
-        'ranges': list(diag.ranges),
-        'fixits': list(diag.fixits)
+        "severity": diag.severity,
+        "location": diag.location,
+        "spelling": diag.spelling,
+        "ranges": list(diag.ranges),
+        "fixits": list(diag.fixits),
     }
 
 
 def fully_qualified(c):
     if c is None:
-        return ''
+        return ""
     elif c.kind == CursorKind.TRANSLATION_UNIT:
-        return ''
+        return ""
     else:
         res = fully_qualified(c.semantic_parent)
-        if res != '':
-            return res + '::' + c.spelling
+        if res != "":
+            return res + "::" + c.spelling
         return c.spelling
 
 
 def fully_qualified_pretty(c):
     if c is None:
-        return ''
+        return ""
     elif c.kind == CursorKind.TRANSLATION_UNIT:
-        return ''
+        return ""
     else:
         res = fully_qualified(c.semantic_parent)
-        if res != '':
-            return res + '::' + c.displayname
+        if res != "":
+            return res + "::" + c.displayname
         return c.displayname
 
 
@@ -75,15 +76,12 @@ def show_info(node, xfiles, xprefs, cur_fun=None):
     if node.kind == CursorKind.FUNCTION_TEMPLATE:
         if not is_excluded(node, xfiles, xprefs):
             cur_fun = node
-            FULLNAMES[fully_qualified(cur_fun)].add(
-                fully_qualified_pretty(cur_fun))
+            FULLNAMES[fully_qualified(cur_fun)].add(fully_qualified_pretty(cur_fun))
 
-    if node.kind == CursorKind.CXX_METHOD or \
-            node.kind == CursorKind.FUNCTION_DECL:
+    if node.kind == CursorKind.CXX_METHOD or node.kind == CursorKind.FUNCTION_DECL:
         if not is_excluded(node, xfiles, xprefs):
             cur_fun = node
-            FULLNAMES[fully_qualified(cur_fun)].add(
-                fully_qualified_pretty(cur_fun))
+            FULLNAMES[fully_qualified(cur_fun)].add(fully_qualified_pretty(cur_fun))
 
     if node.kind == CursorKind.CALL_EXPR:
         if node.referenced and not is_excluded(node.referenced, xfiles, xprefs):
@@ -94,21 +92,21 @@ def show_info(node, xfiles, xprefs, cur_fun=None):
 
 
 def pretty_print(n):
-    v = ''
+    v = ""
     if n.is_virtual_method():
-        v = ' virtual'
+        v = " virtual"
     if n.is_pure_virtual_method():
-        v = ' = 0'
+        v = " = 0"
     return fully_qualified_pretty(n) + v
 
 
 def print_calls(fun_name, so_far, depth=0):
     if depth >= 15:
-        print('...<too deep>...')
+        print("...<too deep>...")
         return
     if fun_name in CALLGRAPH:
         for f in CALLGRAPH[fun_name]:
-            print('  ' * (depth + 1) + pretty_print(f))
+            print("  " * (depth + 1) + pretty_print(f))
             if f in so_far:
                 continue
             so_far.append(f)
@@ -119,80 +117,87 @@ def print_calls(fun_name, so_far, depth=0):
 
 
 def read_compile_commands(filename):
-    if filename.endswith('.json'):
+    if filename.endswith(".json"):
         with open(filename) as compdb:
             return json.load(compdb)
     else:
-        return [{'command': '', 'file': filename}]
+        return [{"command": "", "file": filename}]
 
 
 def read_args(args):
     db = None
     clang_args = []
     excluded_prefixes = []
-    excluded_paths = ['/usr']
+    excluded_paths = ["/usr"]
     i = 0
     while i < len(args):
-        if args[i] == '-x':
+        if args[i] == "-x":
             i += 1
-            excluded_prefixes = args[i].split(',')
-        elif args[i] == '-p':
+            excluded_prefixes = args[i].split(",")
+        elif args[i] == "-p":
             i += 1
-            excluded_paths = args[i].split(',')
-        elif args[i][0] == '-':
+            excluded_paths = args[i].split(",")
+        elif args[i][0] == "-":
             clang_args.append(args[i])
         else:
             db = args[i]
         i += 1
     return {
-        'db': db,
-        'clang_args': clang_args,
-        'excluded_prefixes': excluded_prefixes,
-        'excluded_paths': excluded_paths
+        "db": db,
+        "clang_args": clang_args,
+        "excluded_prefixes": excluded_prefixes,
+        "excluded_paths": excluded_paths,
     }
 
 
 def main():
     if len(sys.argv) < 2:
-        print('usage: ' + sys.argv[0] + ' file.cpp|compile_database.json '
-              '[extra clang args...]')
+        print(
+            "usage: " + sys.argv[0] + " file.cpp|compile_database.json "
+            "[extra clang args...]"
+        )
         return
 
     cfg = read_args(sys.argv)
 
-    print('reading source files...')
-    for cmd in read_compile_commands(cfg['db']):
+    print("reading source files...")
+    for cmd in read_compile_commands(cfg["db"]):
         index = Index.create()
         c = [
-            x for x in cmd['command'].split()
-            if x.startswith('-I') or x.startswith('-std=') or x.startswith('-D')
-        ] + cfg['clang_args']
-        tu = index.parse(cmd['file'], c)
-        print(cmd['file'])
+            x
+            for x in cmd["command"].split()
+            if x.startswith("-I") or x.startswith("-std=") or x.startswith("-D")
+        ] + cfg["clang_args"]
+        print(cmd["file"])
+        if cmd["file"].endswith(".S"):
+            continue
+        # print(c)
+        tu = index.parse(cmd["file"], c)
+        # print(cmd["file"])
         if not tu:
             parser.error("unable to load input")
 
         for d in tu.diagnostics:
             if d.severity == d.Error or d.severity == d.Fatal:
-                print(' '.join(c))
-                pprint(('diags', list(map(get_diag_info, tu.diagnostics))))
+                print(" ".join(c))
+                pprint(("diags", list(map(get_diag_info, tu.diagnostics))))
                 return
-        show_info(tu.cursor, cfg['excluded_paths'], cfg['excluded_prefixes'])
+        show_info(tu.cursor, cfg["excluded_paths"], cfg["excluded_prefixes"])
 
     while True:
-        fun = input('> ')
+        fun = input("> ")
         if not fun:
             break
         if fun in CALLGRAPH:
             print(fun)
             print_calls(fun, list())
         else:
-            print('matching:')
+            print("matching:")
             for f, ff in FULLNAMES.items():
                 if f.startswith(fun):
                     for fff in ff:
                         print(fff)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
